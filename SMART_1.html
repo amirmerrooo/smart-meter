@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>اضافة عداد</title>
+  <link rel="stylesheet" type="text/css" href="SMART_1.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+
+  <div id="pageOverlay">
+    <div id="loadingSpinner"></div>
+  </div>
+
+  <div class="table-header">
+    <h2>Smart Meters</h2>
+    <div class="meta">
+      <div>التاريخ: <strong id="printDate">—</strong></div>
+      <div>اضافة عداد</div>
+    </div>
+  </div>
+
+  <div class="wrapper">
+    <div class="sidebar">
+
+      <h3> ادخال البيانات / البحث.... </h3>
+
+      <button id="addNewRowDbBtn">اضافة عداد جديد</button>
+      <input type="text" id="searchSerial" placeholder="أدخل Serial للبحث">
+      <button id="deleteBySerialBtn">Delete by Serial</button>
+
+      <!-- Modern row count label -->
+      <div id="rowCountLabel" class="row-count-label">
+
+      </div>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="dataTable">
+        <thead>
+          <tr>
+            <th>Serial Num</th>
+            <th>SIM S.Num</th>
+            <th>Badge Number</th>
+            <th>Manufacturer</th>
+            <th>Model</th>
+            <th>EEHC Unified code</th>
+            <th>Facility Description</th>
+            <th>Disco</th>
+            <th>Disco Section</th>
+            <th>Disco Branch</th>
+            <th>منطقة</th>
+            <th>Losses Area</th>
+            <th>Device function</th>
+            <th>Distribution Facility (EEHC unified code)</th>
+            <th>Installation Date</th>
+            <th>ADDRESS4</th>
+            <th>TYPE</th>
+            <th>Latitude(y)</th>
+            <th>Longitude(x)</th>
+          </tr>
+        </thead>
+        <tbody contenteditable="true">
+          <!-- initially empty -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+
+    import { getDatabase, ref, set, get, remove, onValue } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDKiOV6ZH6YIRxa17Ax4rGbpAa9NndwFn0",
+      authDomain: "smart-mater.firebaseapp.com",
+      projectId: "smart-mater",
+      storageBucket: "smart-mater.firebasestorage.app",
+      messagingSenderId: "365335862962",
+      appId: "1:365335862962:web:6aee166866b47584aaf3ab"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // ---- Elements ----
+    const tbody = document.querySelector("#dataTable tbody");
+    const addRowBtn = document.getElementById("addRowBtn");
+    const addNewRowDbBtn = document.getElementById("addNewRowDbBtn");
+    const searchSerialInput = document.getElementById("searchSerial");
+    const searchBtn = document.getElementById("searchBtn");
+    const serialToDeleteInput = document.getElementById("serialToDelete");
+    const deleteBySerialBtn = document.getElementById("deleteBySerialBtn");
+    const printDateEl = document.getElementById("printDate");
+
+    // ---- Date ----
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    printDateEl.textContent = `${yyyy}-${mm}-${dd}`;
+
+    // ---- Helpers ----
+    const FIELD_KEYS = [
+      "serial", "sim", "badge", "manuf", "model", "code1", "facDesc",
+      "disco", "discoSec", "discoBranch", "area", "lossArea", "devFunc",
+      "distFac", "installDate", "addr4", "type", "lat", "lon"
+    ]; // 19 fields after No.
+
+
+
+    function createEditableRow(data = {}, isPlaceholder = false) {
+      const tr = tbody.insertRow();
+
+      FIELD_KEYS.forEach((k) => {
+        const td = tr.insertCell();
+
+        // Make cell editable and focusable by keyboard (Tab works)
+        td.contentEditable = true;
+        td.setAttribute("tabindex", "0");
+
+        // Set content or leave empty
+        if (data[k] && data[k].trim() !== "") {
+          td.textContent = data[k];
+          td.style.color = "#000";
+        } else {
+          td.textContent = ""; // keep truly empty for CSS placeholder
+          if (isPlaceholder) td.style.color = "#000";
+        }
+
+        // Set placeholder text per column
+        // You can customize per field; here a single message:
+        td.setAttribute("data-placeholder", "Type here...");
+      });
+      return tr;
+    }
+
+
+
+    // ---- Add New Row to Database (using first column as key) ----
+    addNewRowDbBtn.addEventListener("click", async () => {
+
+      disablePage(); // 🔵 DISABLE EVERYTHING
+
+      if (tbody.rows.length === 0) {
+        alert("لا توجد صفوف لإضافتها.");
+        return;
+      }
+
+      const rows = Array.from(tbody.rows);
+      let processed = 0;
+
+      for (const row of rows) {
+        const cells = row.cells;
+        // Mandatory: first column (now the identifier)
+        const keyValue = (cells[0]?.textContent || "").trim();
+
+        if (!keyValue) {
+          alert("العمود الأول فارغ. يرجى تعبئة المفتاح قبل الإضافة.");
+          continue;
+        }
+
+        // Build payload from visible cells (shifted indices)
+        const payload = {
+          serial: keyValue,
+          sim: (cells[1]?.textContent || "").trim(),
+          badge: (cells[2]?.textContent || "").trim(),
+          manuf: (cells[3]?.textContent || "").trim(),
+          model: (cells[4]?.textContent || "").trim(),
+          code1: (cells[5]?.textContent || "").trim(),
+          facDesc: (cells[6]?.textContent || "").trim(),
+          disco: (cells[7]?.textContent || "").trim(),
+          discoSec: (cells[8]?.textContent || "").trim(),
+          discoBranch: (cells[9]?.textContent || "").trim(),
+          area: (cells[10]?.textContent || "").trim(),
+          lossArea: (cells[11]?.textContent || "").trim(),
+          devFunc: (cells[12]?.textContent || "").trim(),
+          distFac: (cells[13]?.textContent || "").trim(),
+          installDate: (cells[14]?.textContent || "").trim(),
+          addr4: (cells[15]?.textContent || "").trim(),
+          type: (cells[16]?.textContent || "").trim(),
+          lat: (cells[17]?.textContent || "").trim(),
+          lon: (cells[18]?.textContent || "").trim()
+        };
+
+        try {
+          // Upsert under deterministic key: SMART/{firstColumnValue}
+          await set(ref(db, `SMART/${keyValue}`), payload);
+          row.dataset.key = keyValue;
+          processed++;
+        } catch (e) {
+          console.error(e);
+          alert(`فشل حفظ المفتاح: ${keyValue}`);
+        }
+      }
+
+      if (processed > 0) {
+        await updateRowCount();   // <-- missing
+
+        enablePage(); // 🔵 ENABLE EVERYTHING AGAIN
+
+        alert(`تم حفظ ${processed} صف/صفوف في Firebase باستخدام العمود الأول كمفتاح.`);
+      }
+    });
+
+
+
+    // ---- Live Search by typing ----
+    searchSerialInput.addEventListener("input", async () => {
+
+      const query = searchSerialInput.value.trim();
+      if (!query) {
+        tbody.innerHTML = ""; // clear table if input empty
+        return;
+      }
+
+      try {
+        const snap = await get(ref(db, `SMART/${query}`));
+        tbody.innerHTML = ""; // clear
+
+        if (!snap.exists()) {
+          // optional: show placeholder row if not found
+          createEditableRow({}, true);
+          return;
+        }
+
+        const rowData = snap.val();
+        const tr = createEditableRow(rowData);
+        tr.dataset.key = query;
+
+      } catch (e) {
+        console.error(e);
+        alert("حدث خطأ أثناء البحث.");
+      }
+    });
+
+
+
+    // ---- Select row ----
+    let selectedRow = null;
+    tbody.addEventListener("click", (e) => {
+      const tr = e.target.closest("tr");
+      if (!tr) return;
+      if (selectedRow) selectedRow.classList.remove("selected-row");
+      selectedRow = tr;
+      selectedRow.classList.add("selected-row");
+    });
+
+
+
+    // ---- Delete by key (using the same input) ----
+    deleteBySerialBtn.addEventListener("click", async () => {
+
+      disablePage();
+
+      const keyValue = searchSerialInput.value.trim();
+      if (!keyValue) {
+        alert("يرجى إدخال المفتاح للحذف.");
+        return;
+      }
+      if (!confirm(`هل تريد حذف الصف الذي يحتوي على المفتاح: ${keyValue}؟`)) return;
+
+      try {
+        // Check if record exists
+        const snap = await get(ref(db, `SMART/${keyValue}`));
+        if (!snap.exists()) {
+          alert("المفتاح غير موجود في قاعدة البيانات.");
+          return;
+        }
+
+        // Delete from DB
+        await remove(ref(db, `SMART/${keyValue}`));
+
+        await updateRowCount();   // <-- missing
+
+        // Delete any matching row in the table view
+        const rowToDelete = Array.from(tbody.rows).find(r => (r.cells[0]?.textContent || "").trim() === keyValue);
+        if (rowToDelete) {
+          tbody.removeChild(rowToDelete);
+        }
+
+        enablePage();
+        alert("تم حذف الصف من الجدول وقاعدة البيانات.");
+      } catch (e) {
+        console.error(e);
+        alert("فشل الحذف من قاعدة البيانات.");
+      }
+    });
+
+    window.addEventListener("DOMContentLoaded", () => {
+      createEditableRow({}, true);
+      updateRowCount();     // <-- missing
+    });
+
+
+    function updateRowCount() {
+
+      disablePage();
+
+      const label = document.getElementById("rowCountLabel");
+      if (!label) {
+        console.error("rowCountLabel element not found!");
+        return;
+      }
+
+      const dbRef = ref(db, "SMART");
+      onValue(
+        dbRef,
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            label.textContent = "أجمالى العدادات: 0";
+            return;
+          }
+
+          const val = snapshot.val();
+          const count = Object.keys(val).length; // ✅ count all records
+
+          enablePage();
+
+          label.textContent = `أجمالى العدادات: ${count}`;
+        },
+        (error) => {
+          console.error("onValue error:", error);
+          label.textContent = "أجمالى العدادات: —";
+        }
+      );
+    }
+
+
+
+    function disablePage() {
+      document.getElementById("pageOverlay").style.display = "flex";
+    }
+
+    function enablePage() {
+      document.getElementById("pageOverlay").style.display = "none";
+    }
+
+
+  </script>
+</body>
+
+</html>

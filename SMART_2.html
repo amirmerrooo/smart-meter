@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Admin</title>
+    <link rel="stylesheet" type="text/css" href="SMART_2.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+
+    <div id="pageOverlay">
+        <div id="loadingSpinner"></div>
+    </div>
+
+    <div class="table-header">
+        <h2>Smart Meters</h2>
+        <div class="meta">
+            <div>التاريخ: <strong id="printDate">—</strong></div>
+            <div>Admin</div>
+        </div>
+    </div>
+
+    <div class="wrapper">
+        <div class="sidebar">
+
+            <h3>تحميل البيانات</h3>
+            <button id="restorbtn">Restore</button>
+            <label for="excelFile">Upload Excel File:</label>
+            <input type="file" id="excelFile" accept=".xlsx, .xls" title="Choose an Excel file to upload" />
+            <button id="uploadBtn">Upload Table to Firebase</button>
+            <!-- New Delete All button -->
+            <button id="deleteAllBtn">Delete ALL Data</button>
+
+        </div>
+
+        <div class="table-wrapper">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Serial Num</th>
+                        <th>SIM S.Num</th>
+                        <th>Badge Number</th>
+                        <th>Manufacturer</th>
+                        <th>Model</th>
+                        <th>EEHC Unified code</th>
+                        <th>Facility Description</th>
+                        <th>Disco</th>
+                        <th>Disco Section</th>
+                        <th>Disco Branch</th>
+                        <th>منطقة</th>
+                        <th>Losses Area</th>
+                        <th>Device function</th>
+                        <th>Distribution Facility (EEHC unified code)</th>
+                        <th>Installation Date</th>
+                        <th>ADDRESS4</th>
+                        <th>TYPE</th>
+                        <th>Latitude(y)</th>
+                        <th>Longitude(x)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- dynamically filled -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import { getDatabase, ref, set, get, remove, onValue } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKiOV6ZH6YIRxa17Ax4rGbpAa9NndwFn0",
+            authDomain: "smart-mater.firebaseapp.com",
+            projectId: "smart-mater",
+            storageBucket: "smart-mater.firebasestorage.app",
+            messagingSenderId: "365335862962",
+            appId: "1:365335862962:web:6aee166866b47584aaf3ab"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const tbody = document.querySelector("#dataTable tbody");
+        const fileInput = document.getElementById("excelFile");
+        const uploadBtn = document.getElementById("uploadBtn");
+        const deleteAllBtn = document.getElementById("deleteAllBtn");
+
+        // Helper: Convert Excel serial to dd/mm/yyyy
+        function excelDateToJSDate(serial) {
+            if (!serial || isNaN(serial)) return serial || "";
+            const utc_days = Math.floor(serial - 25569);
+            const date = new Date(utc_days * 86400 * 1000);
+            const fractional_day = serial - Math.floor(serial);
+            const total_seconds = Math.floor(86400 * fractional_day);
+            const hours = Math.floor(total_seconds / 3600);
+            const minutes = Math.floor(total_seconds / 60) % 60;
+            const seconds = total_seconds % 60;
+            date.setHours(hours, minutes, seconds);
+            const dd = String(date.getDate()).padStart(2, '0');
+            const mm = String(date.getMonth() + 1).padStart(2, '0');
+            const yyyy = date.getFullYear();
+            return `${dd}/${mm}/${yyyy}`;
+        }
+
+        // ---- Read Excel File ----
+        fileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const data = evt.target.result;
+                const workbook = XLSX.read(data, { type: "binary" });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                if (!worksheet) return alert("No sheet found!");
+
+                const excelData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+                tbody.innerHTML = "";
+
+                excelData.forEach(item => {
+                    const tr = tbody.insertRow();
+                    const keys = [
+                        "Serial Num", "SIM S.Num", "Badge Number", "Manufacturer", "Model",
+                        "EEHC Unified code", "Facililty Description", "Disco ", "Disco Section",
+                        "Disco Branch", "منطقة", "Losses Area", "Device function",
+                        "Distribution Facility (EEHC unified code)", "Installation Date",
+                        "ADDRESS4", "TYPE", "Latitude(y)", "Longitude(x)"
+                    ];
+
+                    keys.forEach((key, idx) => {
+                        const td = tr.insertCell();
+                        let val = item[key] || "";
+                        if (key === "Installation Date") {
+                            val = excelDateToJSDate(val);
+                        }
+                        td.textContent = val;
+                        td.contentEditable = idx !== 0; // make Serial editable false
+                    });
+                });
+            };
+            reader.readAsBinaryString(file);
+        });
+
+        // ---- Upload Table to Firebase ----
+        uploadBtn.addEventListener("click", async () => {
+            if (!tbody.rows.length) return alert("لا توجد صفوف لإضافتها.");
+
+            const rows = Array.from(tbody.rows);
+            let processed = 0;
+
+            for (const row of rows) {
+                const cells = row.cells;
+                const serial = (cells[0]?.textContent || "").trim();
+                if (!serial) {
+                    alert("العمود الأول (Serial Num) فارغ.");
+                    continue;
+                }
+
+                const payload = {
+                    serial: serial,
+                    sim: (cells[1]?.textContent || "").trim(),
+                    badge: (cells[2]?.textContent || "").trim(),
+                    manuf: (cells[3]?.textContent || "").trim(),
+                    model: (cells[4]?.textContent || "").trim(),
+                    code1: (cells[5]?.textContent || "").trim(),
+                    facDesc: (cells[6]?.textContent || "").trim(),
+                    disco: (cells[7]?.textContent || "").trim(),
+                    discoSec: (cells[8]?.textContent || "").trim(),
+                    discoBranch: (cells[9]?.textContent || "").trim(),
+                    area: (cells[10]?.textContent || "").trim(),
+                    lossArea: (cells[11]?.textContent || "").trim(),
+                    devFunc: (cells[12]?.textContent || "").trim(),
+                    distFac: (cells[13]?.textContent || "").trim(),
+                    installDate: (cells[14]?.textContent || "").trim(),
+                    addr4: (cells[15]?.textContent || "").trim(),
+                    type: (cells[16]?.textContent || "").trim(),
+                    lat: (cells[17]?.textContent || "").trim(),
+                    lon: (cells[18]?.textContent || "").trim()
+                };
+
+                try {
+                    await set(ref(db, `SMART/${serial}`), payload);
+                    processed++;
+                } catch (e) {
+                    console.error(e);
+                    alert(`فشل حفظ السيريال: ${serial}`);
+                }
+            }
+
+            alert(`تم حفظ ${processed} صف/صفوف بنجاح.`);
+        });
+
+        // ---- Restore Data from Firebase ----
+        document.getElementById("restorbtn").addEventListener("click", async () => {
+            tbody.innerHTML = "";
+            const snapshot = await get(ref(db, "SMART"));
+            if (!snapshot.exists()) return alert("No data found in database!");
+
+            snapshot.forEach(childSnap => {
+                const tr = tbody.insertRow();
+                const data = childSnap.val();
+                const values = [
+                    data.serial, data.sim, data.badge, data.manuf, data.model,
+                    data.code1, data.facDesc, data.disco, data.discoSec, data.discoBranch,
+                    data.area, data.lossArea, data.devFunc, data.distFac, data.installDate,
+                    data.addr4, data.type, data.lat, data.lon
+                ];
+
+                values.forEach((v, i) => {
+                    const td = tr.insertCell();
+                    td.textContent = i === 14 ? excelDateToJSDate(v) : v || "";
+                    td.contentEditable = i !== 0; // Serial not editable
+                });
+            });
+        });
+
+        // ---- Delete All Data ----
+        deleteAllBtn.addEventListener("click", async () => {
+            const password = prompt("أدخل كلمة المرور لحذف جميع البيانات:");
+            if (password !== "123") return alert("كلمة المرور غير صحيحة!");
+            if (!confirm("هل أنت متأكد أنك تريد حذف جميع البيانات؟")) return;
+
+            try {
+                await remove(ref(db, "SMART"));
+                tbody.innerHTML = "";
+                alert("تم حذف جميع البيانات من الجدول وقاعدة البيانات.");
+            } catch (e) {
+                console.error(e);
+                alert("فشل الحذف من قاعدة البيانات.");
+            }
+        });
+
+        function disablePage() {
+            document.getElementById("pageOverlay").style.display = "flex";
+        }
+
+        function enablePage() {
+            document.getElementById("pageOverlay").style.display = "none";
+        }
+
+        // ---- Set today date in header ----
+        const today = new Date();
+        document.getElementById("printDate").textContent =
+            `${String(today.getFullYear())}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    </script>
+</body>
+
+</html>

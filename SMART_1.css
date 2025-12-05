@@ -1,0 +1,234 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Cairo', 'Poppins', sans-serif;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: #f4f6f9;
+    color: #333;
+    direction: rtl;
+}
+
+/* Header */
+.table-header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 20px;
+    text-align: center;
+    border-bottom: 4px solid #1abc9c;
+}
+
+.table-header h2 {
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.table-header .meta {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+/* Layout: sidebar + content */
+.wrapper {
+    display: flex;
+    flex: 1;
+}
+
+/* Sidebar */
+.sidebar {
+    width: 260px;
+    background: #34495e;
+    color: #fff;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.sidebar h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    padding-bottom: 5px;
+}
+
+/* Sidebar layout */
+.sidebar {
+    width: 260px;
+    background: #34495e;
+    color: #fff;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    /* stack items vertically */
+    gap: 15px;
+}
+
+/* General buttons */
+.sidebar button,
+.sidebar input {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.sidebar button {
+    background: #1abc9c;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.sidebar button:hover {
+    background: #16a085;
+}
+
+/* Special styling for Delete button */
+#deleteBySerialBtn {
+    background: #e74c3c;
+    /* red */
+    margin-top: auto;
+    /* push to bottom of sidebar */
+}
+
+#deleteBySerialBtn:hover {
+    background: #c0392b;
+    /* darker red on hover */
+}
+
+.sidebar input {
+    background: #fff;
+    color: #333;
+}
+
+/* Table wrapper: fixed height + scroll both ways */
+.table-wrapper {
+    flex: 1;
+    padding: 20px;
+    overflow-x: auto;
+    /* horizontal scroll */
+    overflow-y: auto;
+    /* vertical scroll */
+    /* leave space for header/footer */
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    height: 730px;
+}
+
+/* Table styles */
+#dataTable {
+    min-width: 1200px;
+    /* force horizontal scroll if too wide */
+    border-collapse: collapse;
+    width: 100%;
+}
+
+#dataTable th,
+#dataTable td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+    white-space: nowrap;
+    /* prevent wrapping so horizontal scroll works */
+}
+
+#dataTable th {
+    background: #1abc9c;
+    color: #fff;
+    font-weight: 600;
+}
+
+#dataTable tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+#dataTable tr.selected-row {
+    background: #ffe9a8 !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .wrapper {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .sidebar button,
+    .sidebar input {
+        flex: 1 1 45%;
+    }
+}
+
+.row-count-label {
+    background: #1abc9c;
+    color: #fff;
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* Placeholder for editable cells when empty */
+td[contenteditable="true"]:empty::before {
+    content: attr(data-placeholder);
+    color: #999;
+}
+
+/* Optional: style to hint it's editable */
+td[contenteditable="true"] {
+    outline: none;
+    cursor: text;
+}
+
+/* ===== Full-page overlay for disabling everything ===== */
+#pageOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.7);
+    /* semi-transparent white */
+    backdrop-filter: blur(3px);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+/* ===== Spinner ===== */
+#loadingSpinner {
+    width: 70px;
+    height: 70px;
+    border: 8px solid #ccc;
+    border-top: 8px solid #3498db;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}

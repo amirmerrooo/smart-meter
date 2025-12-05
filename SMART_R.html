@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>تقارير</title>
+    <link rel="stylesheet" type="text/css" href="SMART_R.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="pageOverlay">
+        <div id="loadingSpinner"></div>
+    </div>
+
+    <div class="table-header">
+        <h2>Smart Meters</h2>
+        <div class="meta">
+            <div>التاريخ: <strong id="printDate">—</strong></div>
+            <div>تقرير البحث</div>
+        </div>
+    </div>
+
+    <div class="wrapper">
+        <div class="sidebar">
+            <h3>البحث</h3>
+            <button id="restorbtn">Restore</button>
+
+            <!-- Search & Filters -->
+            <input type="text" id="searchSerial" placeholder="بحث بالسيريال">
+
+            <select id="filterDisco" title="اختر القطاع"></select>
+            <select id="filterDiscoSec" title="اختر محطة المحولات"></select>
+            <select id="filterDevFunc" title="اختر النوع (محطة/لوحة/كومباكت/كشك منخفض)"></select>
+            <select id="filterType" title="اختر النوع"></select>
+            <input type="text" id="filterEEHC" placeholder="بحث باسم Name Plate" title="أدخل اسم Name Plate">
+            <input type="text" id="filterAddress4" placeholder="بحث باسم اللوحة / المغذى" title="أدخل اسم اللوحة / المغذى">
+            <input type="date" id="dateFrom" placeholder="اختر تاريخ البداية" title="اختر تاريخ البداية">
+            <label>إلى:</label>
+            <input type="date" id="dateTo" placeholder="اختر تاريخ النهاية" title="اختر تاريخ النهاية">
+
+            <div id="rowCountLabel" class="row-count-label"></div>
+        </div>
+
+        <div class="table-wrapper">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Serial Num</th>
+                        <th>SIM S.Num</th>
+                        <th>Badge Number</th>
+                        <th>Manufacturer</th>
+                        <th>Model</th>
+                        <th>EEHC Unified code</th>
+                        <th>Facility Description</th>
+                        <th>Disco</th>
+                        <th>Disco Section</th>
+                        <th>Disco Branch</th>
+                        <th>منطقة</th>
+                        <th>Losses Area</th>
+                        <th>Device function</th>
+                        <th>Distribution Facility (EEHC unified code)</th>
+                        <th>Installation Date</th>
+                        <th>ADDRESS4</th>
+                        <th>TYPE</th>
+                        <th>Latitude(y)</th>
+                        <th>Longitude(x)</th>
+                    </tr>
+                </thead>
+                <tbody contenteditable="true">
+                    <!-- data loaded dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+        import { getDatabase, ref, set, get, remove, onValue } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-database.js";
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKiOV6ZH6YIRxa17Ax4rGbpAa9NndwFn0",
+            authDomain: "smart-mater.firebaseapp.com",
+            projectId: "smart-mater",
+            storageBucket: "smart-mater.firebasestorage.app",
+            messagingSenderId: "365335862962",
+            appId: "1:365335862962:web:6aee166866b47584aaf3ab"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // Elements
+        const tbody = document.querySelector("#dataTable tbody");
+        const searchSerialInput = document.getElementById("searchSerial");
+        const printDateEl = document.getElementById("printDate");
+
+        // Set today's date
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, "0");
+        const dd = String(today.getDate()).padStart(2, "0");
+        printDateEl.textContent = `${yyyy}-${mm}-${dd}`;
+
+        async function loadTableFromFirebase() {
+            disablePage(); // show overlay
+
+            // allow overlay to render
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            tbody.innerHTML = "";
+            const dbRef = ref(db, "SMART");
+
+            try {
+                const snapshot = await get(dbRef);
+                if (!snapshot.exists()) {
+                    enablePage();
+                    return;
+                }
+
+                snapshot.forEach(childSnap => {
+                    const tr = tbody.insertRow();
+                    const data = childSnap.val();
+                    const values = [
+                        data.serial, data.sim, data.badge, data.manuf, data.model,
+                        data.code1, data.facDesc, data.disco, data.discoSec, data.discoBranch,
+                        data.area, data.lossArea, data.devFunc, data.distFac, data.installDate,
+                        data.addr4, data.type, data.lat, data.lon
+                    ];
+                    values.forEach((v, i) => {
+                        const td = tr.insertCell();
+                        td.textContent = v || "";
+                        td.contentEditable = i !== 0;
+                    });
+                });
+
+            } catch (err) {
+                console.error("Error loading data:", err);
+            }
+
+            enablePage();         // hide overlay
+            generateFilterLists();
+            applyFilters();
+        }
+
+
+        function updateRowCount() {
+            disablePage();
+            const label = document.getElementById("rowCountLabel");
+            const dbRef = ref(db, "SMART");
+            onValue(dbRef, snapshot => {
+                if (!snapshot.exists()) {
+                    label.textContent = "أجمالى العدادات: 0";
+                    return;
+                }
+                enablePage();
+                label.textContent = `أجمالى العدادات: ${Object.keys(snapshot.val()).length}`;
+            });
+        }
+
+        function fillSelect(id, values, label) {
+            const select = document.getElementById(id);
+            select.innerHTML = `<option value="">${label}</option>`;
+            values.forEach(v => {
+                if (v) select.innerHTML += `<option value="${v}">${v}</option>`;
+            });
+        }
+
+        function generateFilterLists() {
+            const rows = Array.from(tbody.rows);
+            const discoSet = new Set();
+            const discoSecSet = new Set();
+            const devFuncSet = new Set();
+            const typeSet = new Set();
+
+            rows.forEach(row => {
+                discoSet.add(row.cells[8].textContent.trim());
+                discoSecSet.add(row.cells[11].textContent.trim());
+                devFuncSet.add(row.cells[12].textContent.trim());
+                typeSet.add(row.cells[16].textContent.trim());
+            });
+
+            fillSelect("filterDisco", discoSet, "بحث بالقطاع");
+            fillSelect("filterDiscoSec", discoSecSet, "بحث بمحطة المحولات");
+            fillSelect("filterDevFunc", devFuncSet, "بحث النوع (محطة/لوحة/كومباكت/كشك منخفض)");
+            fillSelect("filterType", typeSet, "بحث بالنوع");
+        }
+
+        function applyFilters() {
+            const disco = document.getElementById("filterDisco").value;
+            const discoSec = document.getElementById("filterDiscoSec").value;
+            const devFunc = document.getElementById("filterDevFunc").value;
+            const type = document.getElementById("filterType").value;
+            const eeHC = document.getElementById("filterEEHC").value.trim().normalize("NFC").toLowerCase();
+            const facDesc = document.getElementById("filterAddress4").value.trim().normalize("NFC").toLowerCase();
+            const serialQuery = searchSerialInput.value.trim().normalize("NFC").toLowerCase();
+
+            const dateFrom = document.getElementById("dateFrom").value;
+            const dateTo = document.getElementById("dateTo").value;
+
+            let visibleCount = 0;
+
+            Array.from(tbody.rows).forEach(row => {
+                const v_disco = row.cells[8].textContent.trim();
+                const v_discoSec = row.cells[11].textContent.trim();
+                const v_devFunc = row.cells[12].textContent.trim();
+                const v_type = row.cells[16].textContent.trim();
+                const v_eeHC = row.cells[5].textContent.trim().normalize("NFC").toLowerCase();
+                const v_facDesc = row.cells[15].textContent.trim().normalize("NFC").toLowerCase();
+                const v_serial = row.cells[0].textContent.trim().normalize("NFC").toLowerCase();
+                const v_date = row.cells[14].textContent.trim();
+
+                let show = true;
+
+                if (disco && v_disco !== disco) show = false;
+                if (discoSec && v_discoSec !== discoSec) show = false;
+                if (devFunc && v_devFunc !== devFunc) show = false;
+                if (type && v_type !== type) show = false;
+                if (eeHC && !v_eeHC.includes(eeHC)) show = false;
+                if (facDesc && !v_facDesc.includes(facDesc)) show = false;
+                if (serialQuery && !v_serial.includes(serialQuery)) show = false;
+
+                // Date filter
+                if (v_date) {
+                    const [day, month, year] = v_date.split("/").map(Number);
+                    const rowDate = new Date(year, month - 1, day);
+                    if (dateFrom && rowDate < new Date(dateFrom)) show = false;
+                    if (dateTo && rowDate > new Date(dateTo)) show = false;
+                }
+
+                row.style.display = show ? "" : "none";
+                if (show) visibleCount++;
+            });
+
+            document.getElementById("rowCountLabel").textContent = `أجمالى العدادات: ${visibleCount}`;
+        }
+
+        // Event listeners
+        ["filterDisco", "filterDiscoSec", "filterDevFunc", "filterType"].forEach(id => {
+            document.getElementById(id).addEventListener("change", applyFilters);
+        });
+        ["filterEEHC", "filterAddress4", "searchSerial"].forEach(id => {
+            document.getElementById(id).addEventListener("input", applyFilters);
+        });
+        ["dateFrom", "dateTo"].forEach(id => {
+            document.getElementById(id).addEventListener("change", applyFilters);
+        });
+
+        document.getElementById("restorbtn").addEventListener("click", async () => {
+            searchSerialInput.value = "";
+            document.getElementById("filterDisco").value = "";
+            document.getElementById("filterDiscoSec").value = "";
+            document.getElementById("filterDevFunc").value = "";
+            document.getElementById("filterType").value = "";
+            document.getElementById("filterEEHC").value = "";
+            document.getElementById("filterAddress4").value = "";
+            document.getElementById("dateFrom").value = "";
+            document.getElementById("dateTo").value = "";
+
+            await loadTableFromFirebase();
+        });
+
+        document.addEventListener("DOMContentLoaded", () => {
+            updateRowCount();
+            loadTableFromFirebase();
+        });
+
+
+        function disablePage() {
+            const overlay = document.getElementById("pageOverlay");
+            overlay.style.display = "flex"; // show overlay and spinner
+        }
+
+        function enablePage() {
+            const overlay = document.getElementById("pageOverlay");
+            overlay.style.display = "none"; // hide overlay
+        }
+
+
+    </script>
+</body>
+
+</html>

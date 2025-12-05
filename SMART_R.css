@@ -1,0 +1,247 @@
+/* ========================================= */
+/* RESET & BASE */
+/* ========================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Cairo', 'Poppins', sans-serif;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background: #f4f6f9;
+    color: #333;
+    direction: rtl;
+    overflow-y: hidden;
+    /* hide vertical scroll */
+}
+
+
+/* ========================================= */
+/* HEADER */
+/* ========================================= */
+.table-header {
+    background: #2c3e50;
+    color: #fff;
+    padding: 20px;
+    text-align: center;
+    border-bottom: 4px solid #1abc9c;
+}
+
+.table-header h2 {
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+.table-header .meta {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+
+/* ========================================= */
+/* SIDEBAR + CONTENT LAYOUT */
+/* ========================================= */
+.wrapper {
+    display: flex;
+    flex: 1;
+    gap: 0;
+}
+
+
+/* ========================================= */
+/* SIDEBAR */
+/* ========================================= */
+.sidebar {
+    width: 280px;
+    background: #34495e;
+    color: #fff;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    /* smaller gap between all elements */
+    border-left: 4px solid #1abc9c;
+}
+
+.sidebar h3 {
+    font-size: 18px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+
+/* BUTTONS & INPUTS */
+.sidebar button,
+.sidebar input,
+.sidebar select {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.sidebar button {
+    background: #1abc9c;
+    color: #fff;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.sidebar button:hover {
+    background: #16a085;
+}
+
+.sidebar select,
+.sidebar input {
+    background: #fff;
+    color: #333;
+}
+
+
+/* FILTER BOX */
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.filter-title {
+    font-size: 15px;
+    margin-bottom: 4px;
+    color: #eee;
+}
+
+/* Row Counter */
+#rowCountLabel {
+    background: #1abc9c;
+    padding: 10px 15px;
+    color: #fff;
+    border-radius: 7px;
+    text-align: center;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+
+/* ========================================= */
+/* TABLE WRAPPER */
+/* ========================================= */
+/* Table wrapper: fixed height + scroll both ways */
+.table-wrapper {
+    flex: 1;
+    padding: 10px;
+    overflow-x: auto;
+    /* horizontal scroll */
+    overflow-y: auto;
+    /* vertical scroll */
+    /* leave space for header/footer */
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    height: 730px;
+}
+
+/* Table styles */
+#dataTable {
+    min-width: 1200px;
+    /* force horizontal scroll if too wide */
+    border-collapse: collapse;
+    width: 100%;
+}
+
+#dataTable th,
+#dataTable td {
+    padding: 12px 15px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+    white-space: nowrap;
+    /* prevent wrapping so horizontal scroll works */
+}
+
+#dataTable th {
+    background: #1abc9c;
+    color: #fff;
+    font-weight: 600;
+}
+
+#dataTable tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+#dataTable tr.selected-row {
+    background: #ffe9a8 !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .wrapper {
+        flex-direction: column;
+    }
+
+    /* Placeholder for editable cells */
+    td[contenteditable="true"]:empty::before {
+        content: attr(data-placeholder);
+        color: #aaa;
+    }
+
+
+    /* ========================================= */
+    /* RESPONSIVE */
+    /* ========================================= */
+    @media (max-width: 800px) {
+        .wrapper {
+            flex-direction: column;
+        }
+
+        .sidebar {
+            width: 100%;
+            border-left: none;
+            border-bottom: 4px solid #1abc9c;
+        }
+
+        .sidebar button,
+        .sidebar input,
+        .sidebar select {
+            flex: 1 1 48%;
+        }
+    }
+
+
+    #pageOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(4px);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    #loadingSpinner {
+        width: 70px;
+        height: 70px;
+        border: 8px solid #ccc;
+        border-top: 8px solid #3498db;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+}
